@@ -1,0 +1,418 @@
+#!/bin/bash
+
+
+command=`echo $1 | cut -b2`  #get first letter of first argument
+
+#create temp files to use throughout program
+temp1="tempI$$"
+temp2="tempII$$"
+temp3="tempIII$$"
+temp4="tempIV$$"
+inputFile="input$$"
+
+#trap statement to clean out all temp files if program exits
+trap "rm -f $inputFile$$ $temp1$$ $temp2$$ $temp3$$ $temp4$$; exit 1" INT HUP TERM
+
+#check the number of arguments entered
+#if number is two get data from file, if one get data from standard input
+if [ "$#" = 2 ]
+then
+	#check if file is readable
+	#if not readable send error to stderr
+	if [ -r $2 ]
+	then
+		#see if first letter of first arg is r, if so test by row
+		if [ "$command" = "r" ]
+		then
+			curLine=$2
+			
+			#check if file exists, if not send error to stderr
+			if [ -e $curLine ]
+			then
+				echo "Average Median"
+				
+				#check if file is empty
+				if [ -s $curLine ]
+				then
+					#loop to read file line by line
+					#using temp files to sort each line and 
+					#resulting in temp file with each line sorted
+					while read curLine
+					do
+						> $temp1$$
+						#loop through each number and pass to temp file
+						for i in $curLine
+						do
+							echo $i >> $temp1$$
+						done
+
+						#sort data in temp1 and redirect to temp2
+						sort -n < $temp1$$ >  $temp2$$
+
+						#replace newlines with tabs
+						cat $temp2$$ | tr '\n' '\t' > $temp3$$
+						
+						#append sorted line in temp3 to temp4
+						cat $temp3$$ >> $temp4$$
+		
+						#append newline character to end of line in temp4
+						echo >> $temp4$$
+					done < $2
+
+
+					#loop through sorted temp file to calculate the average
+					#and find the median
+					while read line
+					do
+						sum=0
+						count=0
+						medCount=0
+							
+						#loop to calculate the sum of each line and the number count		
+						for i in $line
+						do
+							sum=`expr $sum + $i`
+							count=`expr $count + 1`
+						done
+
+						#get middle of line
+						mid=`expr $count / 2`
+
+						#loop to find middle variable
+						#increment and 'median' count and check whether 
+						#it is equal to position of mid
+						for i in $line
+						do
+							if [ $medCount -eq $mid ] 	#if equal set median and break out of loop
+							then
+								median=$i
+								break
+							else				#else increment
+								medCount=`expr $medCount + 1`
+							fi
+						done
+
+						#calculate average of each line
+						mean=$((($sum + ($count / 2)) / $count))
+
+						#display data to screen
+						echo -e "$mean\t$median"
+					done < $temp4$$
+				else			#if file is empty display nothing
+					echo ""
+					exit 1
+				fi
+			else
+				echo "./stats: File $2 not exist" 1>&2 
+			fi
+		#if first letter of first arg is c, then test by column
+		elif [ "$command" = "c" ]
+		then
+			#check if file exists
+			if [ -e $2 ]
+			then
+				#check if file is empty
+				if [ -s $2 ]
+				then
+					#loop through each line and calculate column count
+					while read line
+					do
+						lineCount=0
+						for i in $line
+						do
+							lineCount=`expr $lineCount + 1`
+						done
+						break
+					done < $2
+
+					count=1
+					lineCount=`expr $lineCount + 1`
+							
+					#loop to put data into temp files
+					while [ $count -lt $lineCount ]
+					do
+						#cut each column and redirect to temp1
+						cut -f $count $2 > $temp1$$
+
+						#sort data in temp1 numerically and redirect to temp2
+						sort -n < $temp1$$ > $temp2$$
+
+						#convert newlines to tabs and redirect to temp3
+						cat $temp2$$ | tr '\n' '\t' > $temp3$$
+
+						#append sorted line in temp3 to temp4
+						cat $temp3$$ >> $temp4$$
+
+						#append newline character to end of temp4
+						echo >> $temp4$$
+
+						count=`expr $count + 1`
+					done
+
+					#loop sorted temp file to calculate average and find median
+					while read line
+					do
+						sum=0
+						count=0
+						medCount=0
+									
+						#loop to calculate sum of each line
+						for i in $line
+						do
+							sum=`expr $sum + $i`
+							count=`expr $count + 1`
+						done
+
+						#get middle where median will be located
+						mid=`expr $count / 2`
+
+						#loop to find median number
+						for i in $line
+						do
+							if [ $medCount -eq $mid ]	#if equal set median and break out of loop
+							then
+								median=$i
+								break
+							else				#if not increment
+								medCount=`expr $medCount + 1`
+							fi
+						done
+
+						#calculate average of line
+						mean=$((($sum + ($count / 2)) / $count))
+
+						#append averages to temp file
+						echo -e $mean >> tempMeans
+
+						#append medians to temp file
+						echo -e $median >> tempMed
+					done < $temp4$$
+
+					#convert newlines to tabs
+					cat tempMeans | tr '\n' '\t' > means
+
+					#append newline to end
+					echo >> means
+
+					#convert newlines to tabs
+					cat tempMed | tr '\n' '\t' > median
+
+					#append newline to end
+					echo >> median
+	
+					#display averages to screen
+					echo "Averages:"
+					cat means
+
+					#display medians to screen
+					echo "Medians:"
+					cat median
+
+					#remove files
+					rm -f tempMed
+					rm -f median
+					rm -f means
+					rm -f tempMeans
+				else			#if file is empty display nothing
+					echo "Averages:"
+					echo ""
+					echo "Medians:"
+					echo ""
+					exit 1
+				fi
+			else
+				echo "./stats: File does not exist" 1>&2
+			fi
+		else
+			echo "./stats {-rows|-cols} [file]" 1>&2
+			exit 1
+		fi
+	else
+		echo "./stats: cannot read $2" 1>&2
+		exit 1
+	fi
+elif [ "$#" = 1 ]			#if number of args is one get data from standard input
+then
+	#if first letter of arg is r test by row
+	if [ "$command" = "r" ]
+	then
+		#redirect standard input into a temp file
+		cat > "$inputFile$$"
+		
+		echo "Average Median"
+
+		#loop through temp file line by line and sort data
+		while read curLine
+		do
+			> $temp1$$
+			for i in $curLine
+			do
+				echo $i >> $temp1$$		#append each number in line to temp1
+			done
+
+			#sort numbers and redirect to temp3
+			sort -n < $temp1$$ > $temp2$$
+
+			#convert newlines to tabs and redirect to temp3
+			cat $temp2$$ | tr '\n' '\t' > $temp3$$
+				
+			#append line in temp3 to temp4
+			cat $temp3$$ >> "$temp4$$"
+
+			#append newline character to temp4
+			echo >> "$temp4$$"
+		done < $inputFile$$
+
+
+		#loop to find median and calculate average
+		while read line
+		do
+			sum=0
+			count=0
+			medCount=0
+							
+			#loop to calculate sum of line
+			for i in $line
+			do
+				sum=`expr $sum + $i`
+				count=`expr $count + 1`
+			done
+
+			#find where median will be
+			mid=`expr $count / 2`
+
+			#loop to set median
+			for i in $line
+			do
+				if [ $medCount -eq $mid ]		#if equal set median and break out of loop
+				then
+					median=$i
+					break
+				else					#if not equal increment
+					medCount=`expr $medCount + 1`
+				fi
+			done
+
+			#calculate average of line
+			mean=$((($sum + ($count / 2)) / $count))
+
+			#display data to screen
+			echo -e "$mean\t$median"
+		done < $temp4$$
+	
+	#if arg starts with c test by column
+	elif [ "$command" = "c" ]
+	then
+		#redirect standard input to temp file
+		cat > "$inputFile$$"
+
+		#loop to get column count
+		while read line
+		do
+			lineCount=0
+			for i in $line
+			do
+				lineCount=`expr $lineCount + 1`
+			done
+			break
+		done < $inputFile$$
+
+		
+		count=1
+		lineCount=`expr $lineCount + 1`
+		
+		#put column data in temp files to sort		
+		while [ $count -lt $lineCount ]
+		do
+			cut -f $count "$inputFile$$" > $temp1$$		#redirect column to temp1
+
+			#sort temp1 and redirect to temp2
+			sort -n < $temp1$$ > $temp2$$
+
+			#convert newlines to tabs and redirect to temp3
+			cat $temp2$$ | tr '\n' '\t' > $temp3$$
+
+			#append line in temp3 to temp4
+			cat $temp3$$ >> "$temp4$$"
+
+			#append newline character to temp4 line
+			echo >> "$temp4$$"
+
+			count=`expr $count + 1`
+		done
+		
+		#loop to find median and calculate average
+		while read line
+		do
+			sum=0
+			count=0
+			medCount=0
+						
+			#loop through each number and calculate sum
+			for i in $line
+			do
+				sum=`expr $sum + $i`
+				count=`expr $count + 1`
+			done
+
+			#get position median will be
+			mid=`expr $count / 2`
+
+			#loop to set median
+			for i in $line
+			do
+				if [ $medCount -eq $mid ]		#if equal set median and break from loop
+				then
+					median=$i
+					break
+				else					#if not equal increment
+					medCount=`expr $medCount + 1`
+				fi
+			done
+
+			#calculate average
+			mean=$((($sum + ($count / 2)) / $count))
+
+			#append averages and medians to their own files
+			echo -e $mean >> tempMeans
+			echo -e $median >> tempMed
+		done < "$temp4$$"
+
+		#convert newlines to tabs redirect to temp files
+		cat tempMeans | tr '\n' '\t' > means
+		echo >> means
+		cat tempMed | tr '\n' '\t' > median
+		echo >> median
+
+		#display averages and medians to screen
+		echo "Averages:"
+		cat means
+		echo "Medians:"
+		cat median
+
+		#remove files
+		rm -f tempMed
+		rm -f median
+		rm -f means
+		rm -f tempMeans
+	else
+		echo "./stats {-rows|-cols} [file]" 1>&2
+		exit 1
+	fi
+elif [ "$#" = 0 ]		#if no arguments are entered send error to stderr
+then
+	echo "./stats {-rows|-cols} [file]" 1>&2
+	exit 1
+elif [ "$#" -gt 2 ]		#if too many arguments are entered send error to stderr
+then
+	echo "./stats {-rows|-cols} [file]" 1>&2	
+	exit 1
+fi
+
+#remove remaining temp files
+rm -f $inputFile$$
+rm -f $temp1$$
+rm -f $temp2$$
+rm -f $temp3$$
+rm -f $temp4$$
+
